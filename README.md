@@ -1,0 +1,2 @@
+# strandr
+Simple Terminal Randr
