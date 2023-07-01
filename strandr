@@ -1,0 +1,461 @@
+#!/bin/bash
+
+#STRandr - Copyright (C) 2023  ItzSelenux
+
+c0="\033[0m"
+c1="\033[32m"
+c2="\e[35m"
+ign="ignoring other possible parameters"
+
+	if [[ $1 == *B* ]]; then
+		echo -e "${c2}-B detected: for Basic Mode: $ign${c0}"
+		adv=0
+	elif [[ $1 == *A* ]]; then
+		echo -e "${c2}-A detected: for Advanced Mode: $ign${c0}"
+		adv=1
+	elif [[ $1 == *M* ]]; then
+		echo -e "${c2}-M detected: for Multi-Monitor Mode: $ign${c0}"
+		adv=2
+	elif [[ $1 == *D* ]]; then
+		echo -e "${c2}-D detected: for Default Mode: $ign${c0}"
+		adv=3
+	elif [[ $1 == *S* ]]; then
+		echo -e "${c2}-D detected: for Scaling Mode: $ign${c0}"
+		adv=6
+	elif [[ "$1" =~ [mRrsop] ]]; then
+		echo -e "${c2}Trying $1${c0}"
+		moption=$1
+		adv=4
+	elif [[ "$1" =~ [h] ]]; then
+		adv=5
+fi
+
+mmenu()
+{
+echo -e "Simple Terminal Randr - Display Settings
+
+you can put [mRrsop], see -h for more info
+
+1. Basic Mode (Default)
+2. Advanced Mode
+3. Multi-Monitor Mode
+4. Set Display as default
+5. Change Scaling Mode
+6. Exit
+"
+echo -n "Select an Configurator Mode: "
+	read moption
+
+if [[ -z "$moption" ]]; then
+	moption=1
+fi
+
+	case $moption in
+		1)
+			echo -e "${c1}Basic Mode selected. ${c0}"
+			adv=0
+			;;
+		2)
+			echo -e "${c1}Advanced Mode selected. ${c0}"
+			adv=1
+			;;
+		3)
+			echo -e "${c1}Multi-Monitor Mode selected. ${c0}"
+			adv=2
+			;;
+		4)
+			echo -e "${c1}Set Default selected. ${c0}"
+			adv=3
+			;;
+		5)
+			echo -e "${c1}Set Scaling Mode selected. ${c0}"
+			adv=6
+			;;
+		6)
+			exit 0
+			;;
+		*)
+			echo -e "${c1}Trying $moption${c0}"
+			adv=4
+			;;
+	esac
+}
+soutput() 
+{
+	local screens=($(xrandr | grep -oP '^[\w-]+(?=\sconnected)'))
+	for ((i=0; i<${#screens[@]}; i++)); do
+		echo "$((i+1)). ${screens[i]}"
+	done
+
+	if (( ${#screens[@]} == 1 )); then
+		seoutput=${screens[0]}
+		echo -e "${c1}Selected screen: $seoutput${c0}"
+		noutputs=1
+	return
+	fi
+
+	valid_choice=false
+
+	while [ "$valid_choice" = false ]; do
+		read -p "Select a screen: " choice
+
+	if ((choice >= 1 && choice <= ${#screens[@]})); then
+		if [ "$resoutput" -eq 1 ]; then
+			reoutput=${screens[choice-1]}
+		else
+			seoutput=${screens[choice-1]}
+		fi
+		
+		echo -e "${c1}Selected screen: $seoutput${c0}"
+		valid_choice=true
+	else
+		echo "Invalid option. Please select a valid screen."
+	fi
+	done
+}
+
+smode() 
+{
+	resolutions=$(xrandr | grep -oP '\d+x\d+(_\d+\.\d+)?' | tail -n +2)
+	counter=1
+
+	for resolution in $resolutions; do
+		echo "$counter. $resolution"
+		counter=$((counter+1))
+	done
+
+	valid_choice=false
+
+	while [ "$valid_choice" = false ]; do
+		read -p "Select a mode [Default: 1]: " choice
+
+		if [ -z "$choice" ]; then
+			choice=1  # Si no se ingresó ninguna opción, se selecciona la primera por defecto
+		fi
+
+	if [ "$choice" -ge 1 ] && [ "$choice" -le "$counter" ]; then
+		semode=$(echo "$resolutions" | sed -n "${choice}p")
+		valid_choice=true
+		echo -e "${c1}Selected mode: $semode${c0}"
+	else
+		echo "Invalid choice. Please select a valid mode."
+	fi
+	done
+}
+
+srate() {
+	rates=$(xrandr | grep $semode | sed '/connected/d' | sed '/current/d' | cut -d ' ' -f5- | sed 's/+//g' )
+	rcounter=1
+
+	for rate in $rates; do
+		echo "$rcounter. $rate"
+		rcounter=$((rcounter+1))
+	done
+
+	if [ $rcounter -eq 2 ]; then
+		serate=$(echo $rates | cut -d ' ' -f2)
+		echo -e "${c1}Selected rate: $serate""Hz${c0}"
+		return
+	fi
+
+	valid_choice=false
+
+	while [ "$valid_choice" = false ]; do
+		read -p "Select a refresh rate [Default: 1]: " choice
+
+		if [ -z "$choice" ]; then
+			choice=1  # Si no se ingresó ninguna opción, se selecciona la primera por defecto
+		fi
+
+		if [ "$choice" -ge 1 ] && [ "$choice" -le "$rcounter" ]; then
+			serate=$(echo $rates | cut -d ' ' -f$choice)
+			echo -e "${c1}Selected rate: $serate""Hz${c0}"
+			valid_choice=true
+		else
+			echo "Invalid choice. Please select a valid refresh rate."
+		fi
+	done
+}
+
+
+sscale()
+{
+while true; do
+	read -p "Select scale factor [30-200, default: 100]: " schoice
+	if [[ -z "$schoice" ]]; then
+		schoice=100
+	fi
+
+	if [[ $schoice =~ ^[0-9]+$ ]]; then
+		if (( schoice >= 30 && schoice <= 200 )); then
+			sescale=$(bc <<< "scale=2; $schoice/100")
+			sescale=$(printf "%.2f" "$sescale")
+			break
+		fi
+	fi
+
+	echo "Invalid number, please try again."
+done
+echo -e "${c1}selected scale: $schoice%${c0}"
+}
+
+srotate()
+{
+	echo "1. Normal
+2. Left
+3. Right
+4. Inverted
+"
+	echo -n "Select Rotation [Default: 1]: "
+	read option
+
+if [[ -z "$option" ]]; then
+	option=1
+fi
+
+	case $option in
+		1)
+			serotate="normal"
+			;;
+		2)
+			serotate="left"
+			;;
+		3)
+			serotate="right"
+			;;
+		4)
+			serotate="inverted"
+			;;
+		*)
+			echo "Invalid option. Please select a valid mode."
+			;;
+	esac
+	echo -e "${c1}Rotate: $serotate ${c0}"
+}
+
+sscaling()
+{
+	echo "1. 1:1
+2. Aspect
+3. Center
+4. Full
+"
+	echo -n "Select Rotation [Default: 1]: "
+	read option
+
+if [[ -z "$option" ]]; then
+	option=1
+fi
+
+	case $option in
+		1)
+			sescaling="1:1"
+			;;
+		2)
+			sescaling="Aspect"
+			;;
+		3)
+			sescaling="Center"
+			;;
+		4)
+			sescaling="Full"
+			;;
+		*)
+			echo "Invalid option. Please select a valid mode."
+			;;
+	esac
+	echo -e "${c1}Scaling Mode: $sescaling ${c0}"
+}
+
+sonoff()
+{
+	if [ "$noutputs" -eq 1 ]; then
+	:
+else
+	echo -n "Do you want to turn off this output? [y/N]: "
+	read option
+
+if [[ -z "$option" ]]; then
+	option=N
+fi
+
+	case $option in
+		N)
+			seoff="--off"
+			echo -e "${$seoutput: Off}"
+			;;
+		y)
+			seoff=""
+			;;
+	esac
+fi
+}
+
+spos()
+{
+	echo "1. Same As
+2. Left Of
+3. Right Of
+4. Above Of
+5. Below Of"
+	echo -n "Select Rotation [Default: 1]: "
+	read option
+
+if [[ -z "$option" ]]; then
+	option=1
+fi
+
+	case $option in
+		1)
+			sepos="--same-as"
+			;;
+		2)
+			sepos="--left-of"
+			;;
+		3)
+			sepos="--right-of"
+			;;
+		4)
+			sepos="--above"
+			;;
+		5)
+			sepos="--below"
+			;;
+		*)
+			echo "Invalid option. Please select a valid mode."
+			;;
+	esac
+	resoutput=1
+	soutput
+	echo -e "${c1}Position: $seoutput $sepos $reoutput  ${c0}"
+}
+
+
+
+if [ -z "$adv" ]; then
+	mmenu
+fi
+
+if [ "$adv" -eq 0 ]; then
+soutput
+smode
+srate
+xrandr --output "$seoutput" --mode "$semode" --rate $serate
+echo "Resolution changed to $semode@$serate""Hz on $seoutput"
+fi
+
+if [ "$adv" -eq 1 ]; then
+soutput
+smode
+srate
+sscale
+srotate
+xrandr --output "$seoutput" --mode "$semode" --rate $serate --scale $sescale --rotate $serotate
+echo "Resolution changed to $semode@$serate""Hz on $seoutput, with scale $sescale and rotated to $serotate"
+fi
+
+if [ "$adv" -eq 2 ]; then
+soutput
+	if [ "$noutputs" -eq 1 ]; then
+		echo -e "${c2}$seoutput is the only display"
+	else
+		sonoff
+		spos
+		xrandr --output "$seoutput" 
+		echo "$seoutput is $sepos $seoff"
+fi
+
+fi
+
+if [ "$adv" -eq 3 ]; then
+soutput
+xrandr --output "$seoutput" --auto --rotate normal --scale 1
+echo "$seoutput setted as default"
+fi
+
+if [ "$adv" -eq 6 ]; then
+sscaling
+xrandr --output "$seoutput" --set "Scaling Mode" $sescaling
+echo "$seoutput setted as default"
+fi
+
+if [ "$adv" -eq 4 ]; then
+	if [[ $moption == *m* ]]; then
+		xr0="--mode"
+		echo -e "${c1}m detected: for Mode${c0}"
+		smode
+	fi
+
+	if [[ $moption == *R* ]]; then
+		xr1="--rate"
+		echo -e "${c1}R detected: for Rate${c0}"
+		if [ -z "$semode" ]; then
+		echo -e "${c2}Can't select Rate without selecting a Mode:${c0}"
+		xr0="--mode"
+		smode
+		fi
+		srate
+	fi
+
+	if [[ $moption == *r* ]]; then
+		xr2="--rotate"
+		echo -e "${c1}r detected: for Rotate${c0}"
+		srotate
+	fi
+
+	if [[ $moption == *s* ]]; then
+		xr3="--scale"
+		echo -e "${c1}s detected: for Scale${c0}"
+		sscale
+	fi
+	if [[ $moption == *p* ]]; then
+		soutput
+		echo -e "${c1}p detected: for Position${c0}"
+		if [ "$noutputs" -eq 1 ]; then
+			echo -e "${c2}$seoutput is the only display"
+		else
+			spos
+			xrandr --output $seoutput --pos $sepos $reoutput
+			exit
+		fi
+	fi
+
+	if [[ $moption == *o* ]]; then
+		soutput
+		echo -e "${c1}o detected: for On/Off${c0}"
+		if [ "$noutputs" -eq 1 ]; then
+			echo -e "${c2}$seoutput is the only display"
+		else
+			spos
+			xrandr --output $seoutput $seoff
+			exit
+		fi
+	fi
+
+	soutput
+	xrandr --output $seoutput $xr0 $semode $xr1 $serate $xr2 $serotate $xr3 $sescale
+fi
+
+if [ "$adv" -eq 5 ]; then
+echo "Simple Terminal Randr - help
+	there is 2 type or arguments
+		1.- Single: if you use those, only one will be detected
+			Syntax -A
+		2.- Multiple: those arguments can be used alongside
+			syntax: -mRrsop
+
+Single Arguments:
+	-B Basic Mode
+	-A Advanced Mode
+	-M Multi-Monitor Mode
+	-S Change Scaling Mode (Available in some displays)
+	-D Default Mode
+Multiple Arguments
+	-m select display mode
+	-R select refresh rate
+	-r select display rotation
+	-s select display scale
+	-o turn on/off a display (only if there is 2 or more displays)
+	-p select display position (only if there is 2 or more displays)"
+fi
+
